@@ -276,6 +276,8 @@ pub struct PacketHeader {
     len: u32,
 }
 
+unsafe impl Send for Handle{}
+
 /// Given a Rust function of type `Fn(PacketHeader, Vec<u8>)`:
 ///
 /// - Create a C function (of type `pcap_handler`) which allows passing arbitrary data in a *mut uchar ptr
