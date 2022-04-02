@@ -207,6 +207,17 @@ pub struct Error {
     code: i32,
 }
 
+impl std::error::Error for Error {}
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "pcap error {}", self.code)?;
+        if let Some(message) = &self.message {
+            write!(f, ": {}", message)?;
+        }
+        Ok(())
+    }
+}
+
 /// A `PCAP_ERRBUF_SIZE`-byte buffer for errors to be written to by libpcap
 /// The buffer is passed to libpcap functions as a `*mut libc::c_char`
 struct ErrBuf {
