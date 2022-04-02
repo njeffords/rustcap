@@ -18,10 +18,10 @@ use winapi::shared::ws2ipdef::SOCKADDR_IN6_LH as sockaddr_in6;
 
 #[derive(Debug)]
 pub struct Address {
-    address: Option<SocketAddr>,
-    netmask: Option<SocketAddr>,
-    broadcast: Option<SocketAddr>,
-    destination: Option<SocketAddr>,
+    pub address: Option<SocketAddr>,
+    pub netmask: Option<SocketAddr>,
+    pub broadcast: Option<SocketAddr>,
+    pub destination: Option<SocketAddr>,
 }
 
 #[cfg(unix)]
@@ -295,10 +295,10 @@ pub struct Handle {
 }
 
 pub struct PacketHeader {
-    tv_sec: i64,
-    tv_usec: i64,
-    caplen: u32,
-    len: u32,
+    pub tv_sec: i64,
+    pub tv_usec: i64,
+    pub caplen: u32,
+    pub len: u32,
 }
 
 unsafe impl Send for Handle{}
