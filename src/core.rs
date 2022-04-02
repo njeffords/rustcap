@@ -346,6 +346,10 @@ impl Handle {
         unsafe { ffi::pcap_datalink(self.handle) }
     }
 
+    pub fn break_loop(&self) {
+        unsafe { ffi::pcap_breakloop(self.handle) }
+    }
+
     pub fn loop_<F: FnMut(PacketHeader, &[u8])>(&self, count: i32, mut f: F) {
         self._loop(count, move |header, packet| {
             let len = unsafe { (*header).len };
@@ -401,6 +405,40 @@ impl Handle {
 
     pub fn set_filter(&self, filter: &mut ffi::bpf_program) -> Result<(),Error> {
         self.chkerr(unsafe { ffi::pcap_setfilter(self.handle, filter) })
+    }
+
+    pub fn set_nonblock(&mut self, non_blocking: bool) -> Result<(),Error> {
+        let mut err_buf = ErrBuf::new();
+        let res = unsafe {
+            ffi::pcap_setnonblock(
+                self.handle,
+                if non_blocking { 1 } else { 0  },
+                err_buf.as_raw_ptr()
+            )
+        };
+        if res != 0 {
+            Err(Error::new(err_buf, 1))
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn set_snaplen(&mut self, snaplen: u32) -> Result<(),Error> {
+        self.chkerr(unsafe {
+            ffi::pcap_set_snaplen(
+                self.handle,
+                snaplen as i32
+            )
+        })
+    }
+
+    pub fn set_promisc(&mut self, promisc: bool) -> Result<(),Error> {
+        self.chkerr(unsafe {
+            ffi::pcap_set_promisc(
+                self.handle,
+                if promisc { 1 } else { 0 }
+            )
+        })
     }
 
     pub fn activate(&mut self) -> Result<(),Error> {
