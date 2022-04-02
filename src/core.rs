@@ -11,6 +11,8 @@ use std::ffi::FromBytesWithNulError;
 use std::mem::MaybeUninit;
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::slice;
+#[cfg(feature="breakable")]
+use std::sync::Arc;
 #[cfg(windows)]
 use winapi::shared::ws2def::{AF_INET, AF_INET6, SOCKADDR_IN as sockaddr_in};
 #[cfg(windows)]
@@ -290,8 +292,25 @@ pub fn find_all_devs() -> Result<NetworkInterfaceIterator, Error> {
     }
 }
 
+/// when break_loop is enabled, we need to be able to extend the lifetime of the
+/// device to that of the "breaker" that is passed elsewhere, in this case, the
+/// responsibility for closing the device is defered to a reference counted
+/// instance of this type. This allows the main handle to still be treated as
+/// single threaded with a single multi-threadable break_loop call.
+#[cfg(feature="breakable")]
+struct HandleLifetime(*mut ffi::pcap);
+
 pub struct Handle {
     handle: *mut ffi::pcap,
+    #[cfg(feature="breakable")]
+    handle_lifetime: Arc<HandleLifetime>,
+}
+
+#[cfg(feature="breakable")]
+#[derive(Clone)]
+pub struct LoopBreaker {
+    handle: *mut ffi::pcap,
+    _handle_lifetime: Arc<HandleLifetime>,
 }
 
 pub struct PacketHeader {
@@ -302,6 +321,9 @@ pub struct PacketHeader {
 }
 
 unsafe impl Send for Handle{}
+
+#[cfg(feature="breakable")]
+unsafe impl Send for LoopBreaker{}
 
 /// Given a Rust function of type `Fn(PacketHeader, Vec<u8>)`:
 ///
@@ -335,7 +357,11 @@ fn convert_got_packet_cb<F: FnMut(*const ffi::pcap_pkthdr, *const libc::c_uchar)
 
 impl Handle {
     fn new(handle: *mut ffi::pcap) -> Handle {
-        Handle { handle }
+        Handle {
+            handle,
+            #[cfg(feature="breakable")]
+            handle_lifetime: Arc::new(HandleLifetime(handle))
+        }
     }
 
     fn chkerr(&self, code: i32) -> Result<(),Error> {
@@ -348,6 +374,14 @@ impl Handle {
 
     pub fn break_loop(&self) {
         unsafe { ffi::pcap_breakloop(self.handle) }
+    }
+
+    #[cfg(feature="breakable")]
+    pub fn loop_breaker(&self) -> LoopBreaker {
+        LoopBreaker{
+            handle: self.handle,
+            _handle_lifetime: self.handle_lifetime.clone()
+        }
     }
 
     pub fn loop_<F: FnMut(PacketHeader, &[u8])>(&self, count: i32, mut f: F) {
@@ -448,6 +482,21 @@ impl Handle {
     }
 }
 
+#[cfg(feature="breakable")]
+impl LoopBreaker {
+    pub fn break_loop(&self) {
+        unsafe { ffi::pcap_breakloop(self.handle) }
+    }
+}
+
+#[cfg(feature="breakable")]
+impl Drop for HandleLifetime {
+    fn drop(&mut self) {
+        unsafe { ffi::pcap_close(self.0) }
+    }
+}
+
+#[cfg(not(feature="breakable"))]
 impl Drop for Handle {
     fn drop(&mut self) {
         unsafe { ffi::pcap_close(self.handle) }
