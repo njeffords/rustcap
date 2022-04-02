@@ -119,6 +119,19 @@ pub struct NetworkInterface {
 }
 
 impl NetworkInterface {
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn description(&self) -> Option<&str> {
+        self.description.as_ref().map(AsRef::as_ref)
+    }
+
+    pub fn addresses(&self) -> &[Address] {
+        &self.addresses
+    }
+
     pub fn is_loopback(&self) -> bool {
         self.flags.contains(IfFlags::PCAP_IF_LOOPBACK)
     }
