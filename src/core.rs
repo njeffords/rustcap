@@ -289,10 +289,10 @@ unsafe impl Send for Handle{}
 ///
 /// C callback definition:
 /// void got_packet(uchar *args, const struct pcap_pkthdr *header, const u_char *packet);
-fn convert_got_packet_cb<F: Fn(*const ffi::pcap_pkthdr, *const libc::c_uchar)>(
+fn convert_got_packet_cb<F: FnMut(*const ffi::pcap_pkthdr, *const libc::c_uchar)>(
     got_packet_rs: &mut F,
 ) -> (ffi::pcap_handler, *mut libc::c_uchar) {
-    unsafe extern "C" fn got_packet<F: Fn(*const ffi::pcap_pkthdr, *const libc::c_uchar)>(
+    unsafe extern "C" fn got_packet<F: FnMut(*const ffi::pcap_pkthdr, *const libc::c_uchar)>(
         user_data: *mut libc::c_uchar,
         header: *const ffi::pcap_pkthdr,
         packet: *const libc::c_uchar,
@@ -317,8 +317,8 @@ impl Handle {
         unsafe { ffi::pcap_datalink(self.handle) }
     }
 
-    pub fn loop_<F: Fn(PacketHeader, Vec<u8>)>(&self, count: i32, f: F) {
-        self._loop(count, |header, packet| {
+    pub fn loop_<F: FnMut(PacketHeader, &[u8])>(&self, count: i32, mut f: F) {
+        self._loop(count, move |header, packet| {
             let len = unsafe { (*header).len };
             let caplen = unsafe { (*header).caplen };
             if caplen < len {
@@ -338,11 +338,11 @@ impl Handle {
                 }
             };
 
-            f(header, packet.to_vec());
+            f(header, packet);
         });
     }
 
-    fn _loop<F: Fn(*const ffi::pcap_pkthdr, *const libc::c_uchar)>(
+    fn _loop<F: FnMut(*const ffi::pcap_pkthdr, *const libc::c_uchar)>(
         &self,
         count: i32,
         mut got_packet_rs: F,
