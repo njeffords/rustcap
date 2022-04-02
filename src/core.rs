@@ -8,6 +8,7 @@ use pcap_sys as ffi;
 use std::ffi::CStr;
 use std::ffi::CString;
 use std::ffi::FromBytesWithNulError;
+use std::mem::MaybeUninit;
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::slice;
 #[cfg(windows)]
@@ -275,13 +276,16 @@ impl Error {
 }
 
 pub fn find_all_devs() -> Result<NetworkInterfaceIterator, Error> {
-    let mut all_devs_buf: *mut ffi::pcap_if = unsafe { std::mem::uninitialized() };
+    let mut all_devs_buf: MaybeUninit<*mut ffi::pcap_if> = MaybeUninit::uninit();
     let mut err_buf = ErrBuf::new();
-    match unsafe { ffi::pcap_findalldevs(&mut all_devs_buf, err_buf.as_raw_ptr()) } {
-        0 => Ok(NetworkInterfaceIterator {
-            base: all_devs_buf,
-            next: all_devs_buf,
-        }),
+    match unsafe { ffi::pcap_findalldevs(all_devs_buf.as_mut_ptr(), err_buf.as_raw_ptr()) } {
+        0 => {
+            let all_devs_buf = unsafe { all_devs_buf.assume_init() };
+            Ok(NetworkInterfaceIterator {
+                base: all_devs_buf,
+                next: all_devs_buf,
+            })
+        },
         rc => Err(Error::new(err_buf, rc)),
     }
 }
