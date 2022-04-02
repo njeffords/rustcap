@@ -251,6 +251,27 @@ impl Error {
             code: err_code,
         }
     }
+
+    fn from_last(handle: *mut ffi::pcap_t, code: i32) -> Error {
+        let message = unsafe {
+            let ptr = ffi::pcap_geterr(handle);
+            if !ptr.is_null() {
+                let msg = CStr::from_ptr(ptr);
+                Some(msg.to_str().unwrap().to_string())
+            } else {
+                None
+            }
+        };
+        Error{ message, code }
+    }
+
+    fn check(handle: *mut ffi::pcap_t, code: i32) -> Result<(),Error> {
+        if code != 0 {
+            Err(Self::from_last(handle, code))
+        } else {
+            Ok(())
+        }
+    }
 }
 
 pub fn find_all_devs() -> Result<NetworkInterfaceIterator, Error> {
@@ -313,6 +334,10 @@ impl Handle {
         Handle { handle }
     }
 
+    fn chkerr(&self, code: i32) -> Result<(),Error> {
+        Error::check(self.handle, code)
+    }
+
     pub fn datalink(&self) -> i32 {
         unsafe { ffi::pcap_datalink(self.handle) }
     }
@@ -355,35 +380,29 @@ impl Handle {
     }
 
     /// int pcap_compile(pcap_t *p, struct bpf_program *fp, char *str, int optimize, bpf_u_int32 netmask)
-    pub fn compile(&self, filter: &str, optimize: bool, netmask: u32) -> ffi::bpf_program {
-        let mut bpf_program: ffi::bpf_program = unsafe { std::mem::uninitialized() };
+    pub fn compile(&self, filter: &str, optimize: bool, netmask: u32) -> Result<ffi::bpf_program,Error> {
+        let mut bpf_program = MaybeUninit::<ffi::bpf_program>::uninit();
         let filter = CString::new(filter).unwrap();
-        let _res = unsafe {
+        let res = unsafe {
             ffi::pcap_compile(
                 self.handle,
-                &mut bpf_program,
+                bpf_program.as_mut_ptr(),
                 filter.as_ptr(),
                 optimize as i32,
                 netmask,
             )
         };
-
-        return bpf_program;
+        self.chkerr(res).map(|_|unsafe { bpf_program.assume_init() })
     }
 
-    pub fn setfilter(&self, filter: &mut ffi::bpf_program) {
-        let _res = unsafe { ffi::pcap_setfilter(self.handle, filter) };
+    pub fn set_filter(&self, filter: &mut ffi::bpf_program) -> Result<(),Error> {
+        self.chkerr(unsafe { ffi::pcap_setfilter(self.handle, filter) })
     }
 
-    pub fn activate(&mut self) {
-        let code = unsafe { ffi::pcap_activate(self.handle) };
-        if code > 0 {
-            println!("warning");
-        } else if code == 0 {
-            println!("success");
-        } else {
-            println!("error");
-        }
+    pub fn activate(&mut self) -> Result<(),Error> {
+        self.chkerr(unsafe {
+            ffi::pcap_activate(self.handle)
+        })
     }
 }
 
