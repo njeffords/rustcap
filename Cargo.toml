@@ -14,6 +14,7 @@ documentation = "https://docs.rs/rustcap"
 members = ["pcap-sys"]
 
 [dependencies]
+log="0.4.16"
 libc = "0.2.43"
 bitflags = "1.0.4"
 pcap-sys = { version = "0.1", path = "pcap-sys" }

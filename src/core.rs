@@ -389,7 +389,7 @@ impl Handle {
             let len = unsafe { (*header).len };
             let caplen = unsafe { (*header).caplen };
             if caplen < len {
-                println!(
+                log::warn!(
                     "WARNING: Didn't capture entire packet: len={}, caplen={}",
                     len, caplen
                 );
