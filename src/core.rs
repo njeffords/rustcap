@@ -13,6 +13,8 @@ use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::slice;
 #[cfg(feature="breakable")]
 use std::sync::Arc;
+use std::time::Duration;
+use std::time::SystemTime;
 #[cfg(windows)]
 use winapi::shared::ws2def::{AF_INET, AF_INET6, SOCKADDR_IN as sockaddr_in};
 #[cfg(windows)]
@@ -313,9 +315,15 @@ pub struct LoopBreaker {
     _handle_lifetime: Arc<HandleLifetime>,
 }
 
+#[derive(Clone,Debug,Eq,PartialEq)]
+pub struct TimeStamp {
+    pub sec: i64,
+    pub usec: i64,
+}
+
+#[derive(Clone,Debug)]
 pub struct PacketHeader {
-    pub tv_sec: i64,
-    pub tv_usec: i64,
+    pub ts: TimeStamp,
     pub caplen: u32,
     pub len: u32,
 }
@@ -353,6 +361,15 @@ fn convert_got_packet_cb<F: FnMut(*const ffi::pcap_pkthdr, *const libc::c_uchar)
         Some(got_packet::<F>),
         got_packet_rs as *mut F as *mut libc::c_uchar,
     )
+}
+
+impl Into<SystemTime> for TimeStamp {
+    fn into(self) -> std::time::SystemTime {
+        SystemTime::UNIX_EPOCH + Duration::new(
+            self.sec as u64,
+            (self.usec * 1000) as u32
+        )
+    }
 }
 
 impl Handle {
@@ -398,8 +415,10 @@ impl Handle {
             let packet = unsafe { slice::from_raw_parts(packet, caplen as _) };
             let header = unsafe {
                 PacketHeader {
-                    tv_sec: (*header).ts.tv_sec as i64,
-                    tv_usec: (*header).ts.tv_usec as i64,
+                    ts: TimeStamp {
+                        sec: (*header).ts.tv_sec as i64,
+                        usec: (*header).ts.tv_usec as i64,
+                    },
                     caplen: (*header).caplen,
                     len: (*header).len,
                 }
